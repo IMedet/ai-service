@@ -23,6 +23,7 @@ public class EventPlan {
     @Data
     public static class Item {
         private String id;
+        private Long catalogItemId;
         private String name;
         private String category;
         private int quantity;

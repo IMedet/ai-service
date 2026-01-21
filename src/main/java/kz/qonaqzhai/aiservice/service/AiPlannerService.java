@@ -1,118 +1,115 @@
 package kz.qonaqzhai.aiservice.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import kz.qonaqzhai.aiservice.dto.AiPlanRequest;
 import kz.qonaqzhai.aiservice.dto.AiPlanResponse;
 import kz.qonaqzhai.aiservice.dto.EventPlan;
+import lombok.RequiredArgsConstructor;
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
-
 @Service
+@RequiredArgsConstructor
 public class AiPlannerService {
 
-    public AiPlanResponse plan(String prompt, String username) {
-        AiPlanResponse response = new AiPlanResponse();
-        response.setMessage("Plan generated. Review and book when ready.");
-        response.setEventPlan(buildDemoPlan(prompt, username));
-        return response;
+    private final ChatClient.Builder chatClientBuilder;
+    private final ObjectMapper objectMapper;
+
+    @Value("${spring.ai.google.genai.api-key:}")
+    private String apiKey;
+
+    public AiPlanResponse plan(AiPlanRequest request, String username) {
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new IllegalStateException("Google AI Studio API key is not configured (GOOGLE_AI_STUDIO_API_KEY)");
+        }
+
+        String language = request.getLanguage();
+        if (language == null || language.isBlank()) {
+            language = "both";
+        }
+
+        String system = "You are an event planning assistant for Qonaqzhai. " +
+                "Return ONLY valid JSON (no markdown, no comments).";
+
+        String schema = "{\n" +
+                "  \"messageRu\": string,\n" +
+                "  \"messageEn\": string,\n" +
+                "  \"eventPlan\": {\n" +
+                "    \"timeline\": string,\n" +
+                "    \"totalCost\": number,\n" +
+                "    \"stages\": [\n" +
+                "      {\n" +
+                "        \"id\": string,\n" +
+                "        \"order\": number,\n" +
+                "        \"title\": string,\n" +
+                "        \"description\": string,\n" +
+                "        \"items\": [\n" +
+                "          {\n" +
+                "            \"id\": string,\n" +
+                "            \"catalogItemId\": number|null,\n" +
+                "            \"name\": string,\n" +
+                "            \"category\": string,\n" +
+                "            \"quantity\": number,\n" +
+                "            \"cost\": number,\n" +
+                "            \"supplier\": string,\n" +
+                "            \"dependency\": string|null,\n" +
+                "            \"reason\": string\n" +
+                "          }\n" +
+                "        ]\n" +
+                "      }\n" +
+                "    ]\n" +
+                "  }\n" +
+                "}";
+
+        String userPrompt = buildUserPrompt(request, username, language, schema);
+
+        ChatClient client = chatClientBuilder.build();
+        ChatResponse chatResponse = client.prompt()
+                .system(system)
+                .user(userPrompt)
+                .call()
+                .chatResponse();
+
+        String content = chatResponse.getResult().getOutput().getText();
+        try {
+            return objectMapper.readValue(content, AiPlanResponse.class);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to parse AI response as JSON", e);
+        }
     }
 
-    private EventPlan buildDemoPlan(String prompt, String username) {
-        EventPlan plan = new EventPlan();
-        plan.setTimeline("Setup: 2 days before | Event day | Cleanup: 1 day after");
+    private String buildUserPrompt(AiPlanRequest request, String username, String language, String schema) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("User: ").append(username).append("\n");
+        sb.append("Language: ").append(language).append("\n");
 
-        List<EventPlan.Stage> stages = new ArrayList<>();
+        if (request.getEventType() != null) sb.append("EventType: ").append(request.getEventType()).append("\n");
+        if (request.getLocation() != null) sb.append("Location: ").append(request.getLocation()).append("\n");
+        if (request.getEventDate() != null) sb.append("EventDate: ").append(request.getEventDate()).append("\n");
+        if (request.getGuestCount() != null) sb.append("GuestCount: ").append(request.getGuestCount()).append("\n");
+        if (request.getBudget() != null) sb.append("Budget: ").append(request.getBudget()).append("\n");
 
-        EventPlan.Stage s1 = new EventPlan.Stage();
-        s1.setId("stage-1");
-        s1.setOrder(1);
-        s1.setTitle("Stage 1: Foundation & Structure");
-        s1.setDescription("Essential infrastructure setup - must be completed first");
-        s1.setItems(List.of(
-                item("1", "Event Tent (20x30m)", "Structure", 1, 850, "TentPro Almaty", null,
-                        "Weather protection and event space definition"),
-                item("2", "Flooring System", "Infrastructure", 600, 720, "EventFloors KZ", null,
-                        "Level surface for furniture placement"),
-                item("3", "Power Generator", "Utilities", 1, 380, "PowerRent Solutions", null,
-                        "Electrical supply for all equipment")
-        ));
+        sb.append("\nFree-form prompt:\n").append(request.getPrompt()).append("\n\n");
 
-        EventPlan.Stage s2 = new EventPlan.Stage();
-        s2.setId("stage-2");
-        s2.setOrder(2);
-        s2.setTitle("Stage 2: Furniture & Seating");
-        s2.setDescription("Requires Stage 1 completion - builds on infrastructure");
-        s2.setItems(List.of(
-                item("4", "Round Tables (10 seats)", "Furniture", 10, 350, "EventPro Almaty", "stage-1",
-                        "Primary seating arrangement"),
-                item("5", "Premium Chairs", "Furniture", 100, 400, "EventPro Almaty", "stage-1",
-                        "Comfortable seating for all guests"),
-                item("6", "VIP Lounge Furniture", "Premium Furniture", 1, 520, "Luxury Events KZ", "stage-1",
-                        "Exclusive area for special guests")
-        ));
+        if (request.getCatalogItems() != null && !request.getCatalogItems().isEmpty()) {
+            sb.append("Catalog items available (use catalogItemId when you select an item):\n");
+            for (AiPlanRequest.CatalogItemHint item : request.getCatalogItems()) {
+                sb.append("- id=").append(item.getId())
+                        .append(" name=").append(item.getName());
+                if (item.getCategory() != null) sb.append(" category=").append(item.getCategory());
+                if (item.getPrice() != null) sb.append(" price=").append(item.getPrice());
+                if (item.getPriceUnit() != null) sb.append(" unit=").append(item.getPriceUnit());
+                if (item.getSupplier() != null) sb.append(" supplier=").append(item.getSupplier());
+                if (item.getAvailable() != null) sb.append(" available=").append(item.getAvailable());
+                sb.append("\n");
+            }
+            sb.append("\n");
+        }
 
-        EventPlan.Stage s3 = new EventPlan.Stage();
-        s3.setId("stage-3");
-        s3.setOrder(3);
-        s3.setTitle("Stage 3: Technical Setup");
-        s3.setDescription("Audio/Visual equipment - requires power from Stage 1");
-        s3.setItems(List.of(
-                item("7", "Sound System Package", "Audio", 1, 620, "SoundWave Rentals", "stage-1",
-                        "Clear audio for presentations and announcements"),
-                item("8", "LED Stage Lighting", "Lighting", 1, 780, "LightUp Events", "stage-1",
-                        "Professional ambiance and stage visibility"),
-                item("9", "Projection Screen & Projector", "Visual", 1, 450, "AV Solutions KZ", "stage-3",
-                        "Display presentations and multimedia content")
-        ));
-
-        EventPlan.Stage s4 = new EventPlan.Stage();
-        s4.setId("stage-4");
-        s4.setOrder(4);
-        s4.setTitle("Stage 4: Decor & Finishing Touches");
-        s4.setDescription("Final aesthetic elements - can be done alongside Stage 3");
-        s4.setItems(List.of(
-                item("10", "Floral Centerpieces", "Decoration", 10, 380, "Blossom Rentals", null,
-                        "Elegant table decoration and atmosphere"),
-                item("11", "Backdrop & Draping", "Decoration", 1, 420, "DecorMasters", null,
-                        "Create focal point and professional look"),
-                item("12", "Signage & Wayfinding", "Organization", 1, 180, "PrintPro Almaty", null,
-                        "Help guests navigate the event space")
-        ));
-
-        stages.add(s1);
-        stages.add(s2);
-        stages.add(s3);
-        stages.add(s4);
-
-        plan.setStages(stages);
-        plan.setTotalCost(stages.stream()
-                .flatMap(s -> s.getItems().stream())
-                .mapToDouble(EventPlan.Item::getCost)
-                .sum());
-
-        return plan;
-    }
-
-    private EventPlan.Item item(
-            String id,
-            String name,
-            String category,
-            int quantity,
-            double cost,
-            String supplier,
-            String dependency,
-            String reason
-    ) {
-        EventPlan.Item i = new EventPlan.Item();
-        i.setId(id);
-        i.setName(name);
-        i.setCategory(category);
-        i.setQuantity(quantity);
-        i.setCost(cost);
-        i.setSupplier(supplier);
-        i.setDependency(dependency);
-        i.setReason(reason);
-        return i;
+        sb.append("Return JSON strictly matching this schema:\n");
+        sb.append(schema);
+        return sb.toString();
     }
 }

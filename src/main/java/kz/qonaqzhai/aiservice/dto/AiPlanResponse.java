@@ -5,6 +5,7 @@ import lombok.Data;
 @Data
 public class AiPlanResponse {
 
-    private String message;
+    private String messageRu;
+    private String messageEn;
     private EventPlan eventPlan;
 }

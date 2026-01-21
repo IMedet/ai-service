@@ -23,6 +23,6 @@ public class AiController {
     @PostMapping("/plan")
     public ResponseEntity<AiPlanResponse> plan(@Valid @RequestBody AiPlanRequest request, Principal principal) {
         String username = principal != null ? principal.getName() : "anonymous";
-        return ResponseEntity.ok(aiPlannerService.plan(request.getPrompt(), username));
+        return ResponseEntity.ok(aiPlannerService.plan(request, username));
     }
 }

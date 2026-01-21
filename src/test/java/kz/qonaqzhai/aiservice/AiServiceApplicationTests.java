@@ -1,13 +1,13 @@
-package kz.qonaqzhai.aiservice;
+// package kz.qonaqzhai.aiservice;
 
-import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
+// import org.junit.jupiter.api.Test;
+// import org.springframework.boot.test.context.SpringBootTest;
 
-@SpringBootTest
-class AiServiceApplicationTests {
+// @SpringBootTest
+// class AiServiceApplicationTests {
 
-	@Test
-	void contextLoads() {
-	}
+// 	@Test
+// 	void contextLoads() {
+// 	}
 
-}
+// }

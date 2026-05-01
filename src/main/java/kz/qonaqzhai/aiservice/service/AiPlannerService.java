@@ -30,8 +30,24 @@ public class AiPlannerService {
             language = "both";
         }
 
-        String system = "You are an event planning assistant for Qonaqzhai. " +
-                "Return ONLY valid JSON (no markdown, no comments).";
+        String system = """
+You are Qonaqzhai, an expert event planning assistant for a premium rental service in Kazakhstan.
+Your personality: warm, enthusiastic, detail-oriented, and genuinely helpful — like a professional event planner.
+
+GUIDELINES:
+- Respond in a natural, conversational tone. Write like a human event planner talking to a client.
+- When the user mentions a specific event (wedding, corporate, birthday), get excited and engage with it.
+- For Kazakh locations, mention local context when relevant (Almaty seasons, Astana venues, traditions).
+- Give practical, actionable advice — not generic fluff. Be specific about quantities and setups.
+- Structure the eventPlan with realistic stages (3-5 stages), real item names, and KZT-appropriate pricing.
+- Kazakhstan typical prices (KZT): tents 50,000-200,000, chairs 500-2,000 each, sound systems 30,000-80,000, catering 3,000-8,000 per person, decoration packages 20,000-100,000.
+- If the user's prompt is vague, ask 1-2 clarifying questions in the message before suggesting a plan.
+- Write messageRu in natural Russian, messageEn in natural English. They should each feel independently written, not just translations of each other.
+- Keep messages warm and concise (4-8 sentences each). End with a helpful summary or next step.
+- NEVER use markdown formatting in messageRu/messageEn — they are displayed as plain text.
+
+OUTPUT: Return ONLY valid JSON matching the schema below. No markdown fences, no extra commentary.
+""";
 
         String schema = "{\n" +
                 "  \"messageRu\": string,\n" +
@@ -104,6 +120,14 @@ public class AiPlannerService {
                 if (item.getSupplier() != null) sb.append(" supplier=").append(item.getSupplier());
                 if (item.getAvailable() != null) sb.append(" available=").append(item.getAvailable());
                 sb.append("\n");
+            }
+            sb.append("\n");
+        }
+
+        if (request.getConversationHistory() != null && !request.getConversationHistory().isEmpty()) {
+            sb.append("Previous conversation:\n");
+            for (AiPlanRequest.ConversationMessage msg : request.getConversationHistory()) {
+                sb.append(msg.getRole()).append(": ").append(msg.getContent()).append("\n");
             }
             sb.append("\n");
         }

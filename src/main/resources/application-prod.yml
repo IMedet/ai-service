@@ -12,7 +12,7 @@ spring:
           options:
             model: ${GOOGLE_GENAI_MODEL:gemini-2.5-flash}
             response-mime-type: application/json
-            temperature: ${GOOGLE_GENAI_TEMPERATURE:0.4}
+            temperature: ${GOOGLE_GENAI_TEMPERATURE:0.7}
 
 server:
   port: ${SERVER_PORT:8084}

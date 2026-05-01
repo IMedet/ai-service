@@ -26,6 +26,8 @@ public class AiPlanRequest {
 
     private List<CatalogItemHint> catalogItems;
 
+    private List<ConversationMessage> conversationHistory;
+
     @Data
     public static class CatalogItemHint {
         @NotNull
@@ -37,5 +39,11 @@ public class AiPlanRequest {
         private String priceUnit;
         private String supplier;
         private Boolean available;
+    }
+
+    @Data
+    public static class ConversationMessage {
+        private String role;
+        private String content;
     }
 }
